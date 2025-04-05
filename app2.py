@@ -12,41 +12,39 @@ st.title("📈 Sales Forecasting Web App")
 uploaded_file = st.file_uploader("Upload your sales data CSV", type=["csv"])
 
 if uploaded_file:
-    # Handle encoding issues
+    # Load Data with safe encoding
     try:
-        data = pd.read_csv(uploaded_file)
-    except UnicodeDecodeError:
-        try:
-            data = pd.read_csv(uploaded_file, encoding='latin1')
-        except Exception as e:
-            st.error(f"Failed to read file: {e}")
-            st.stop()
-
-    # Date Conversion
-    try:
-        data["date"] = pd.to_datetime(data["date"])
+        data = pd.read_csv(uploaded_file, encoding='latin1')
     except Exception as e:
-        st.error(f"Failed to parse 'date' column. Ensure it exists and is properly formatted. Error: {e}")
+        st.error(f"❌ Error reading file: {e}")
         st.stop()
 
-    st.write("### Sample Data", data.head())
+    # Display available columns
+    st.write("🧾 Available Columns:", data.columns.tolist())
 
-    # Prophet Forecasting Model
-    df = data.rename(columns={"date": "ds", "sales": "y"})
+    # Use correct date and sales column names (based on your file)
+    try:
+        data["ORDERDATE"] = pd.to_datetime(data["ORDERDATE"])
+        df = data.rename(columns={"ORDERDATE": "ds", "SALES": "y"})
+    except KeyError as e:
+        st.error(f"❌ Missing expected column: {e}")
+        st.stop()
 
-    # Split Data: 80% Train, 20% Test
+    st.write("### Sample Data", df[["ds", "y"]].head())
+
+    # Split data
     train_size = int(len(df) * 0.8)
     train_df = df.iloc[:train_size]
     test_df = df.iloc[train_size:]
 
+    # Train Prophet model
     model = Prophet()
     model.fit(train_df)
 
-    # Make Future DataFrame for Prediction
+    # Forecast
     future = model.make_future_dataframe(periods=len(test_df))
     forecast = model.predict(future)
 
-    # Get Forecasted vs Actual
     test_forecast = forecast.iloc[-len(test_df):]["yhat"].values
     actual_sales = test_df["y"].values
 
@@ -55,7 +53,6 @@ if uploaded_file:
     rmse = np.sqrt(mean_squared_error(actual_sales, test_forecast))
     r2 = r2_score(actual_sales, test_forecast)
 
-    # Accuracy Results
     st.write("### 📊 Model Accuracy Metrics")
     st.write(f"✔ Mean Absolute Error (MAE): {mae:.2f}")
     st.write(f"✔ Root Mean Squared Error (RMSE): {rmse:.2f}")
@@ -75,7 +72,7 @@ if uploaded_file:
     fig1 = model.plot(forecast)
     st.pyplot(fig1)
 
-    # Trend & Seasonality
+    # Components
     st.write("### 📊 Trend & Seasonality Analysis")
     fig2 = model.plot_components(forecast)
     st.pyplot(fig2)
